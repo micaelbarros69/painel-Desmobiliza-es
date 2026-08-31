@@ -52,7 +52,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-DEFAULT_PATH = r"C:\Users\Usuário\OneDrive - gpssa.com.br\CCO - CE\11 - Nova\04 - MB\sites\Estudo_primarizacao_desmob.xlsx"
+DEFAULT_PATH = "Estudo_primarizacao_desmob.xlsx"
 
 @st.cache_data(ttl=60)
 def load_data(file_path):
