@@ -214,10 +214,13 @@ with tab_frota:
     st.subheader("🚗 Visão Geral da Frota & Indicadores de Desmobilização")
     
     # Cálculo das métricas de viatura (Placas Únicas)
-    df_desmob_viaturas = df_valid_placas[mask_devolver]
+    df_desmob_viaturas = df_valid_placas[mask_devolver].copy()
+    
+    # Garantir desduplicação por placa ao contabilizar veículos
+    df_desmob_unicas = df_desmob_viaturas.drop_duplicates(subset=[col_placa], keep='first')
     
     placas_totais_unicas = df_valid_placas[col_placa].nunique()
-    placas_desmob_unicas = df_desmob_viaturas[col_placa].nunique()
+    placas_desmob_unicas = len(df_desmob_unicas)
     placas_manter_unicas = placas_totais_unicas - placas_desmob_unicas
 
     m1, m2, m3, m4 = st.columns(4)
@@ -228,27 +231,41 @@ with tab_frota:
 
     st.markdown("---")
 
-    # Linha do Tempo de Desmobilização na Frota
-    st.markdown("### 📈 Linha do Tempo: Saída Acumulada de Veículos")
+    # Linha do Tempo Dinâmica por Veículos (Placas Únicas)
+    st.markdown("### 📈 Linha do Tempo: Saída Acumulada de Veículos (Por Placas)")
     
-    df_desmob_timeline = pd.DataFrame({
-        "Mês": ["jul/26", "ago/26", "set/26", "out/26", "nov/26", "dez/26"],
-        "Saídas Mensais": [1, 3, 4, 8, 11, 4],
-        "Desmobilizados Acumulado": [1, 4, 8, 16, 27, 31]
-    })
+    if col_desmob in df_desmob_unicas.columns and not df_desmob_unicas.empty:
+        # Converter coluna de data/desmobilização para datetime para ordenação correta
+        df_desmob_unicas["Data_Desmob"] = pd.to_datetime(df_desmob_unicas[col_desmob], errors='coerce')
+        df_com_data = df_desmob_unicas.dropna(subset=["Data_Desmob"]).copy()
+        
+        if not df_com_data.empty:
+            df_com_data["Mês_Ano"] = df_com_data["Data_Desmob"].dt.strftime('%b/%y').str.lower()
+            
+            # Agrupar contagem de saídas únicas por mês mantendo ordem cronológica
+            df_timeline_veh = df_com_data.groupby(["Data_Desmob", "Mês_Ano"])[col_placa].nunique().reset_index()
+            df_timeline_veh = df_timeline_veh.sort_values("Data_Desmob")
+            df_timeline_veh.columns = ["Data_Desmob", "Mês", "Saídas Mensais"]
+            
+            # Cálculo Acumulado Dinâmico de Veículos
+            df_timeline_veh["Veículos Desmobilizados Acumulado"] = df_timeline_veh["Saídas Mensais"].cumsum()
 
-    fig_desmob_line = px.line(
-        df_desmob_timeline, 
-        x="Mês", 
-        y="Desmobilizados Acumulado", 
-        markers=True, 
-        text="Desmobilizados Acumulado",
-        title="Curva de Crescimento das Desmobilizações (Jul/26 - Dez/26)",
-        color_discrete_sequence=["#EF4444"]
-    )
-    fig_desmob_line.update_traces(textposition="top left", line=dict(width=3))
-    fig_desmob_line.update_layout(template="plotly_white", height=350, yaxis_range=[0, 35])
-    st.plotly_chart(fig_desmob_line, use_container_width=True)
+            fig_desmob_line = px.line(
+                df_timeline_veh, 
+                x="Mês", 
+                y="Veículos Desmobilizados Acumulado", 
+                markers=True, 
+                text="Veículos Desmobilizados Acumulado",
+                title="Curva de Saída Acumulada de Veículos (Placas Únicas)",
+                color_discrete_sequence=["#EF4444"]
+            )
+            fig_desmob_line.update_traces(textposition="top left", line=dict(width=3))
+            fig_desmob_line.update_layout(template="plotly_white", height=350)
+            st.plotly_chart(fig_desmob_line, use_container_width=True)
+        else:
+            st.info("As viaturas a desmobilizar não possuem datas válidas preenchidas na coluna DESMOBIZAÇÃO.")
+    else:
+        st.info("Nenhuma viatura a desmobilizar para montar a linha do tempo.")
 
     # Gráfico de Distribuição por Polo (Contagem de Viaturas Únicas a Desmobilizar)
     st.markdown("### 📊 Viaturas a Desmobilizar por Polo (Placas Únicas)")
