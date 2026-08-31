@@ -235,19 +235,28 @@ with tab_frota:
     st.markdown("### 📈 Linha do Tempo: Saída Acumulada de Veículos (Por Placas)")
     
     if col_desmob in df_desmob_unicas.columns and not df_desmob_unicas.empty:
-        # Converter coluna de data/desmobilização para datetime para ordenação correta
-        df_desmob_unicas["Data_Desmob"] = pd.to_datetime(df_desmob_unicas[col_desmob], errors='coerce')
+        # Converter coluna para datetime
+        df_desmob_unicas["Data_Desmob"] = pd.to_datetime(df_desmob_unicas[col_desmob], dayfirst=True, errors='coerce')
         df_com_data = df_desmob_unicas.dropna(subset=["Data_Desmob"]).copy()
         
         if not df_com_data.empty:
-            df_com_data["Mês_Ano"] = df_com_data["Data_Desmob"].dt.strftime('%b/%y').str.lower()
+            # Criar coluna do Primeiro Dia do Mês para agrupamento correto
+            df_com_data["Mes_Ano_Data"] = df_com_data["Data_Desmob"].dt.to_period('M').dt.to_timestamp()
             
-            # Agrupar contagem de saídas únicas por mês mantendo ordem cronológica
-            df_timeline_veh = df_com_data.groupby(["Data_Desmob", "Mês_Ano"])[col_placa].nunique().reset_index()
-            df_timeline_veh = df_timeline_veh.sort_values("Data_Desmob")
-            df_timeline_veh.columns = ["Data_Desmob", "Mês", "Saídas Mensais"]
+            # Agrupar placas únicas por mês
+            df_timeline_veh = df_com_data.groupby("Mes_Ano_Data")[col_placa].nunique().reset_index()
+            df_timeline_veh = df_timeline_veh.sort_values("Mes_Ano_Data")
             
-            # Cálculo Acumulado Dinâmico de Veículos
+            # Mapeamento de meses para Português
+            meses_pt = {1: 'jan', 2: 'fev', 3: 'mar', 4: 'abr', 5: 'mai', 6: 'jun',
+                        7: 'jul', 8: 'ago', 9: 'set', 10: 'out', 11: 'nov', 12: 'dez'}
+            
+            df_timeline_veh["Mês"] = df_timeline_veh["Mes_Ano_Data"].apply(
+                lambda x: f"{meses_pt[x.month]}/{str(x.year)[2:]}"
+            )
+            
+            # Cálculo Acumulado de Veículos por Mês
+            df_timeline_veh["Saídas Mensais"] = df_timeline_veh[col_placa]
             df_timeline_veh["Veículos Desmobilizados Acumulado"] = df_timeline_veh["Saídas Mensais"].cumsum()
 
             fig_desmob_line = px.line(
@@ -259,8 +268,8 @@ with tab_frota:
                 title="Curva de Saída Acumulada de Veículos (Placas Únicas)",
                 color_discrete_sequence=["#EF4444"]
             )
-            fig_desmob_line.update_traces(textposition="top left", line=dict(width=3))
-            fig_desmob_line.update_layout(template="plotly_white", height=350)
+            fig_desmob_line.update_traces(textposition="top center", line=dict(width=3), marker=dict(size=8))
+            fig_desmob_line.update_layout(template="plotly_white", height=380)
             st.plotly_chart(fig_desmob_line, use_container_width=True)
         else:
             st.info("As viaturas a desmobilizar não possuem datas válidas preenchidas na coluna DESMOBIZAÇÃO.")
